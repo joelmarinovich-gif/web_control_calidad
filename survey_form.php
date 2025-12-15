@@ -49,10 +49,40 @@ $qStmt = $pdo->prepare('SELECT * FROM survey_questions WHERE survey_id = :sid OR
 $qStmt->execute([':sid' => $surveyId]);
 $questions = $qStmt->fetchAll();
 
+// Recolectar preguntas tipo 'antibiotic' y los antibioticos involucrados
+$question_to_antibiotic = [];
+$antibiotic_ids = [];
+foreach ($questions as $qq) {
+  if ($qq['question_type'] === 'antibiotic' && !empty($qq['antibiotic_id'])) {
+    $question_to_antibiotic[(int)$qq['id']] = (int)$qq['antibiotic_id'];
+    $antibiotic_ids[] = (int)$qq['antibiotic_id'];
+  }
+}
+$antibiotic_ids = array_values(array_unique($antibiotic_ids));
+
+// Consultar breakpoints para los antibioticos que aparecen en la encuesta
+$breakpoints = [];
+if (!empty($antibiotic_ids)) {
+  $placeholders = implode(',', array_fill(0, count($antibiotic_ids), '?'));
+  $bpStmt = $pdo->prepare("SELECT * FROM breakpoints WHERE antibiotic_id IN ($placeholders)");
+  $bpStmt->execute($antibiotic_ids);
+  $bpRows = $bpStmt->fetchAll();
+  foreach ($bpRows as $r) {
+    $aid = (int)$r['antibiotic_id'];
+    // normalizar tipos numéricos a float|null para JSON
+    $r['s_upper'] = $r['s_upper'] !== null ? (float)$r['s_upper'] : null;
+    $r['i_lower'] = $r['i_lower'] !== null ? (float)$r['i_lower'] : null;
+    $r['i_upper'] = $r['i_upper'] !== null ? (float)$r['i_upper'] : null;
+    $r['r_lower'] = $r['r_lower'] !== null ? (float)$r['r_lower'] : null;
+    if (!isset($breakpoints[$aid])) $breakpoints[$aid] = [];
+    $breakpoints[$aid][] = $r;
+  }
+}
+
 function fetchOptions($pdo, $questionId) {
-    $s = $pdo->prepare('SELECT * FROM question_options WHERE question_id = :qid ORDER BY display_order ASC, id ASC');
-    $s->execute([':qid' => $questionId]);
-    return $s->fetchAll();
+  $s = $pdo->prepare('SELECT * FROM question_options WHERE question_id = :qid ORDER BY display_order ASC, id ASC');
+  $s->execute([':qid' => $questionId]);
+  return $s->fetchAll();
 }
 
 ?>
@@ -125,4 +155,77 @@ function fetchOptions($pdo, $questionId) {
       </form>
     </div>
   </body>
+  <script>
+    const breakpoints = <?php echo json_encode($breakpoints, JSON_THROW_ON_ERROR); ?>;
+    const questionToAntibiotic = <?php echo json_encode($question_to_antibiotic, JSON_THROW_ON_ERROR); ?>;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      // helper: pick preferred breakpoint (CLSI > EUCAST > LOCAL > first)
+      function pickBreakpoint(list) {
+        if (!Array.isArray(list) || list.length === 0) return null;
+        const pref = ['CLSI','EUCAST','LOCAL'];
+        for (const p of pref) {
+          const found = list.find(b => b.standard === p);
+          if (found) return found;
+        }
+        return list[0];
+      }
+
+      function interpretValue(rawStr, bp) {
+        if (rawStr === null || rawStr === '') return '';
+        const raw = parseFloat(String(rawStr).replace(',', '.'));
+        if (Number.isNaN(raw) || !bp) return 'U';
+
+        const method = bp.method; // 'disk' or 'mic'
+        const s = bp.s_upper;
+        const il = bp.i_lower;
+        const iu = bp.i_upper;
+        const r = bp.r_lower;
+
+        if (method === 'disk') {
+          if (s !== null && raw >= s) return 'S';
+          if (il !== null && iu !== null && raw >= il && raw <= iu) return 'I';
+          if (r !== null && raw <= r) return 'R';
+        } else { // mic
+          if (s !== null && raw <= s) return 'S';
+          if (il !== null && iu !== null && raw >= il && raw <= iu) return 'I';
+          if (r !== null && raw >= r) return 'R';
+        }
+        return 'U';
+      }
+
+      function applyVisual($interpInput, code) {
+        // limpiar clases previas
+        $interpInput.classList.remove('border-success','text-success','border-danger','text-danger','border-warning','text-warning');
+        if (!code) return;
+        if (code === 'S') {
+          $interpInput.classList.add('border-success','text-success');
+        } else if (code === 'R') {
+          $interpInput.classList.add('border-danger','text-danger');
+        } else if (code === 'I') {
+          $interpInput.classList.add('border-warning','text-warning');
+        }
+      }
+
+      // Attach listeners to all antibiotic raw inputs
+      document.querySelectorAll('input[name$="_raw"]').forEach(function (el) {
+        el.addEventListener('input', function (ev) {
+          const name = ev.target.name; // q_<id>_raw
+          const m = name.match(/^q_(\d+)_raw$/);
+          if (!m) return;
+          const qid = parseInt(m[1], 10);
+          const abId = questionToAntibiotic[qid];
+          const bps = breakpoints[abId] || [];
+          const bp = pickBreakpoint(bps);
+          const val = ev.target.value;
+          const code = interpretValue(val, bp);
+          const interpInput = document.querySelector('input[name="q_' + qid + '_interpretation"]');
+          if (interpInput) {
+            interpInput.value = code === 'U' ? '' : code;
+            applyVisual(interpInput, code);
+          }
+        });
+      });
+    });
+  </script>
 </html>
