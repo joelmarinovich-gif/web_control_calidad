@@ -8,9 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $email = isset($_POST['email']) ? trim($_POST['email']) : '';
-$password = isset($_POST['password']) ? $_POST['password'] : '';
+$login_password = isset($_POST['password']) ? $_POST['password'] : '';
 
-if ($email === '' || $password === '') {
+if ($email === '' || $login_password === '') {
     echo "Email y contraseña son requeridos.";
     exit;
 }
@@ -26,7 +26,7 @@ try {
         exit;
     }
 
-    if (!password_verify($password, $user['password_hash'])) {
+    if (!password_verify($login_password, $user['password_hash'])) {
         echo "Contraseña incorrecta.";
         exit;
     }
