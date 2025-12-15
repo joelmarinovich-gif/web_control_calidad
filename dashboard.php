@@ -39,6 +39,7 @@ try {
               <p class="card-text">Has ingresado al panel de control.</p>
               <?php if ($isSuper): ?>
                 <a href="admin_labs.php" class="btn btn-primary me-2">Administrar Laboratorios</a>
+                <a href="admin_users.php" class="btn btn-success me-2">Administrar Usuarios</a>
               <?php endif; ?>
               <a href="logout.php" class="btn btn-outline-secondary">Cerrar Sesión</a>
             </div>
