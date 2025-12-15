@@ -19,11 +19,27 @@ $roleStmt = $pdo->prepare('SELECT name FROM roles WHERE id = :id LIMIT 1');
 $roleStmt->execute([':id' => $_SESSION['role_id'] ?? 0]);
 $roleRow = $roleStmt->fetch();
 if (!$roleRow || in_array($roleRow['name'], ['super_admin','admin'])) {
-    header('Location: dashboard.php');
-    exit;
+  header('Location: dashboard.php');
+  exit;
 }
 
 $userLabId = $_SESSION['lab_id'] ?? null;
+
+// Nombre del usuario para saludo
+$displayName = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : (!empty($_SESSION['email']) ? $_SESSION['email'] : 'Usuario');
+
+// Obtener nombre del laboratorio si existe
+$labName = null;
+if ($userLabId) {
+  try {
+    $l = $pdo->prepare('SELECT name FROM labs WHERE id = :id LIMIT 1');
+    $l->execute([':id' => $userLabId]);
+    $lr = $l->fetch();
+    if ($lr) $labName = $lr['name'];
+  } catch (Exception $e) {
+    // ignore
+  }
+}
 
 // Obtener encuestas activas: globales o específicas del laboratorio del usuario
 $stmt = $pdo->prepare("SELECT id, title, description, scope, lab_id, created_at FROM surveys WHERE is_active = 1 AND (scope = 'global' OR (scope = 'lab' AND lab_id = :lab_id)) ORDER BY created_at DESC");
@@ -42,7 +58,10 @@ $surveys = $stmt->fetchAll();
   <body class="bg-light">
     <div class="container py-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4>Encuestas disponibles</h4>
+        <div>
+          <h4>Hola, <?php echo htmlspecialchars($displayName); ?></h4>
+          <?php if ($labName): ?><div class="text-muted">Laboratorio: <?php echo htmlspecialchars($labName); ?></div><?php endif; ?>
+        </div>
         <div>
           <a href="logout.php" class="btn btn-outline-secondary">Cerrar sesión</a>
         </div>
