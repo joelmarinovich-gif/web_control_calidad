@@ -40,6 +40,7 @@ try {
               <?php if ($isSuper): ?>
                 <a href="admin_labs.php" class="btn btn-primary me-2">Administrar Laboratorios</a>
                 <a href="admin_users.php" class="btn btn-success me-2">Administrar Usuarios</a>
+                <a href="admin_surveys.php" class="btn btn-info me-2">Gestionar Encuestas</a>
               <?php endif; ?>
               <a href="logout.php" class="btn btn-outline-secondary">Cerrar Sesión</a>
             </div>
