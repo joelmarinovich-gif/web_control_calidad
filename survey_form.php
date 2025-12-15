@@ -97,6 +97,15 @@ function fetchOptions($pdo, $questionId) {
   return $s->fetchAll();
 }
 
+// Verificación de doble envío: comprobar si el usuario ya tiene una respuesta para esta encuesta
+$already_submitted = false;
+if (isset($_SESSION['user_id']) && $surveyId > 0) {
+  $checkStmt = $pdo->prepare('SELECT id FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
+  $checkStmt->execute([':sid' => $surveyId, ':uid' => $_SESSION['user_id']]);
+  if ($checkStmt->fetch()) {
+    $already_submitted = true;
+  }
+}
 ?>
 <!doctype html>
 <html lang="es">
@@ -113,7 +122,10 @@ function fetchOptions($pdo, $questionId) {
         <a href="user_dashboard.php" class="btn btn-outline-secondary">Volver</a>
       </div>
 
-      <form method="post" action="responses_submit.php">
+      <?php if ($already_submitted): ?>
+        <div class="alert alert-warning">Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.</div>
+      <?php else: ?>
+      <form method="post" action="responses_submit.php" onsubmit="return confirmSubmit();">
         <input type="hidden" name="survey_id" value="<?php echo (int)$surveyId; ?>">
 
         <?php if (empty($questions)): ?>
@@ -166,11 +178,17 @@ function fetchOptions($pdo, $questionId) {
           <button class="btn btn-primary" type="submit">Enviar Resultados</button>
         </div>
       </form>
+      <?php endif; ?>
     </div>
   </body>
   <script>
     const breakpoints = <?php echo json_encode($breakpoints, JSON_THROW_ON_ERROR); ?>;
     const questionToAntibiotic = <?php echo json_encode($question_to_antibiotic, JSON_THROW_ON_ERROR); ?>;
+
+    // Confirmación de envío del formulario
+    function confirmSubmit() {
+      return confirm('¿Estás seguro que quieres enviar la encuesta? Una vez enviada no podrás modificarla');
+    }
 
     document.addEventListener('DOMContentLoaded', function () {
       // helper: pick preferred breakpoint (CLSI > EUCAST > LOCAL > first)

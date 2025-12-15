@@ -91,6 +91,15 @@ function interpret_using_bp($raw, $bp) {
     return 'U';
 }
 
+// Comprobación de doble envío en backend: evitar envíos forzados
+$checkStmt = $pdo->prepare('SELECT id FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
+$checkStmt->execute([':sid' => $surveyId, ':uid' => $userId]);
+if ($checkStmt->fetch()) {
+    $_SESSION['flash_danger'] = 'Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.';
+    header('Location: survey_form.php?id=' . $surveyId);
+    exit;
+}
+
 try {
     $pdo->beginTransaction();
 
