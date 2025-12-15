@@ -1,11 +1,25 @@
 <?php
 session_start();
 if (!isset($_SESSION['user_id'])) {
-    header('Location: index.php');
-    exit;
+  header('Location: index.php');
+  exit;
 }
 
+require_once __DIR__ . '/config/db.php';
+// Obtener nombre para mostrar
 $name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['email'];
+
+// Determinar si es super_admin para mostrar enlace a admin_labs
+$isSuper = false;
+try {
+  $pdo = getPDO();
+  $r = $pdo->prepare('SELECT name FROM roles WHERE id = :id LIMIT 1');
+  $r->execute([':id' => $_SESSION['role_id'] ?? 0]);
+  $rr = $r->fetch();
+  if ($rr && $rr['name'] === 'super_admin') $isSuper = true;
+} catch (Exception $e) {
+  // ignore - si falla, no mostramos el enlace
+}
 ?>
 <!doctype html>
 <html lang="es">
@@ -23,6 +37,9 @@ $name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['emai
             <div class="card-body">
               <h4 class="card-title">Bienvenido, <?php echo htmlspecialchars($name); ?></h4>
               <p class="card-text">Has ingresado al panel de control.</p>
+              <?php if ($isSuper): ?>
+                <a href="admin_labs.php" class="btn btn-primary me-2">Administrar Laboratorios</a>
+              <?php endif; ?>
               <a href="logout.php" class="btn btn-outline-secondary">Cerrar Sesión</a>
             </div>
           </div>
