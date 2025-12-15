@@ -35,13 +35,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'] ?? '';
         $role_id = (int)($_POST['role_id'] ?? 0);
         $lab_id = $_POST['lab_id'] === '' ? null : (int)$_POST['lab_id'];
-
-        if ($name !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) && $password !== '') {
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $ins = $pdo->prepare('INSERT INTO users (email, password_hash, full_name, role_id, lab_id, is_active) VALUES (:email, :ph, :fn, :rid, :lid, 1)');
-            $ins->execute([':email'=>$email, ':ph'=>$hash, ':fn'=>$name, ':rid'=>$role_id, ':lid'=>$lab_id]);
-        }
+      // Validar rol
+      if ($role_id <= 0) {
+        $_SESSION['flash_danger'] = 'Seleccione un rol válido.';
         header('Location: admin_users.php'); exit;
+      }
+
+      if ($name !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) && $password !== '') {
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        try {
+          $ins = $pdo->prepare('INSERT INTO users (email, password_hash, full_name, role_id, lab_id, is_active) VALUES (:email, :ph, :fn, :rid, :lid, 1)');
+          $ins->execute([':email'=>$email, ':ph'=>$hash, ':fn'=>$name, ':rid'=>$role_id, ':lid'=>$lab_id]);
+          $_SESSION['flash_success'] = 'Usuario creado.';
+        } catch (PDOException $e) {
+          $_SESSION['flash_danger'] = 'Error al crear usuario: ' . $e->getMessage();
+        }
+      } else {
+        $_SESSION['flash_danger'] = 'Complete nombre, email válido y contraseña.';
+      }
+      header('Location: admin_users.php'); exit;
     }
 
     if ($action === 'update') {
@@ -52,15 +64,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role_id = (int)($_POST['role_id'] ?? 0);
         $lab_id = $_POST['lab_id'] === '' ? null : (int)$_POST['lab_id'];
 
+        if ($role_id <= 0) {
+          $_SESSION['flash_danger'] = 'Seleccione un rol válido.';
+          header('Location: admin_users.php'); exit;
+        }
+
         if ($id > 0 && $name !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+          try {
             if ($password !== '') {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                $upd = $pdo->prepare('UPDATE users SET full_name = :fn, email = :email, password_hash = :ph, role_id = :rid, lab_id = :lid WHERE id = :id');
-                $upd->execute([':fn'=>$name, ':email'=>$email, ':ph'=>$hash, ':rid'=>$role_id, ':lid'=>$lab_id, ':id'=>$id]);
+              $hash = password_hash($password, PASSWORD_DEFAULT);
+              $upd = $pdo->prepare('UPDATE users SET full_name = :fn, email = :email, password_hash = :ph, role_id = :rid, lab_id = :lid WHERE id = :id');
+              $upd->execute([':fn'=>$name, ':email'=>$email, ':ph'=>$hash, ':rid'=>$role_id, ':lid'=>$lab_id, ':id'=>$id]);
             } else {
-                $upd = $pdo->prepare('UPDATE users SET full_name = :fn, email = :email, role_id = :rid, lab_id = :lid WHERE id = :id');
-                $upd->execute([':fn'=>$name, ':email'=>$email, ':rid'=>$role_id, ':lid'=>$lab_id, ':id'=>$id]);
+              $upd = $pdo->prepare('UPDATE users SET full_name = :fn, email = :email, role_id = :rid, lab_id = :lid WHERE id = :id');
+              $upd->execute([':fn'=>$name, ':email'=>$email, ':rid'=>$role_id, ':lid'=>$lab_id, ':id'=>$id]);
             }
+            $_SESSION['flash_success'] = 'Usuario actualizado.';
+          } catch (PDOException $e) {
+            $_SESSION['flash_danger'] = 'Error al actualizar usuario: ' . $e->getMessage();
+          }
+        } else {
+          $_SESSION['flash_danger'] = 'Datos inválidos para actualizar usuario.';
         }
         header('Location: admin_users.php'); exit;
     }
@@ -94,6 +118,12 @@ $users = $usersStmt->fetchAll();
   </head>
   <body class="bg-light">
     <div class="container py-4">
+      <?php if (!empty($_SESSION['flash_success'])): ?>
+        <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+      <?php endif; ?>
+      <?php if (!empty($_SESSION['flash_danger'])): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
+      <?php endif; ?>
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Gestión de Usuarios</h3>
         <div>
@@ -208,7 +238,8 @@ $users = $usersStmt->fetchAll();
         document.getElementById('userName').value = '';
         document.getElementById('userEmail').value = '';
         document.getElementById('userPassword').value = '';
-        document.getElementById('userRole').value = '';
+          // set default to first available role to avoid empty selection
+          document.getElementById('userRole').value = '<?php echo isset($roles[0]['id']) ? (int)$roles[0]['id'] : ''; ?>';
         document.getElementById('userLab').value = '';
       });
 
