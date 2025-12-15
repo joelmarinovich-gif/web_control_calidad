@@ -2,6 +2,13 @@
 session_start();
 require_once __DIR__ . '/config/db.php';
 
+// Mostrar flash (si existe)
+$flash = null;
+if (isset($_SESSION['flash'])) {
+  $flash = $_SESSION['flash'];
+  unset($_SESSION['flash']);
+}
+
 // Requiere ID de encuesta
 $survey_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($survey_id <= 0) {
@@ -109,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        $_SESSION['flash'] = ['type'=>'success','message'=>'Pregunta guardada correctamente.'];
         header('Location: admin_questions.php?id=' . $survey_id);
         exit;
     }
@@ -119,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del = $pdo->prepare('DELETE FROM survey_questions WHERE id = :id AND survey_id = :survey_id');
             $del->execute([':id' => $id, ':survey_id' => $survey_id]);
         }
+        $_SESSION['flash'] = ['type'=>'success','message'=>'Pregunta eliminada correctamente.'];
         header('Location: admin_questions.php?id=' . $survey_id);
         exit;
     }
@@ -153,6 +162,14 @@ foreach ($questions as $qq) {
   </head>
   <body class="bg-light">
     <div class="container py-4">
+      <?php if ($flash): ?>
+        <div class="container mt-2">
+          <div class="alert alert-<?php echo $flash['type'] === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+            <?php echo htmlspecialchars($flash['message']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        </div>
+      <?php endif; ?>
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
           <a href="admin_surveys.php" class="btn btn-outline-secondary">&larr; Volver a Encuestas</a>
@@ -292,28 +309,30 @@ foreach ($questions as $qq) {
       document.querySelectorAll('.btn-edit').forEach(function(btn){
         btn.addEventListener('click', function(){
           var id = this.dataset.id;
-          var text = this.dataset.text;
-          var type = this.dataset.type;
-          var required = this.dataset.required === '1';
-          var order = this.dataset.order;
-          var antibiotic = this.dataset.antibiotic;
 
-          document.getElementById('questionModalLabel').textContent = 'Editar Pregunta';
-          document.getElementById('formAction').value = 'update';
-          document.getElementById('qId').value = id;
-          document.getElementById('qText').value = text;
-          document.getElementById('qType').value = type;
-          document.getElementById('antibioticId').value = antibiotic;
-          document.getElementById('qRequired').checked = required;
-          document.getElementById('qOrder').value = order;
-
-          // Clear options field; editing existing options requires additional endpoint (not implemented)
-          document.getElementById('optionsRaw').value = '';
-
-          toggleFields();
-
-          var modal = new bootstrap.Modal(document.getElementById('questionModal'));
-          modal.show();
+          fetch('api_get_question.php?id=' + encodeURIComponent(id), {credentials: 'same-origin'})
+            .then(function(res){
+              if (!res.ok) throw new Error('Error en la petición');
+              return res.json();
+            })
+            .then(function(data){
+              document.getElementById('questionModalLabel').textContent = 'Editar Pregunta';
+              document.getElementById('formAction').value = 'update';
+              document.getElementById('qId').value = data.id;
+              document.getElementById('qText').value = data.question_text;
+              document.getElementById('qType').value = data.question_type;
+              document.getElementById('antibioticId').value = data.antibiotic_id || '';
+              document.getElementById('qRequired').checked = data.required == 1 || data.required === true;
+              document.getElementById('qOrder').value = data.display_order || 0;
+              // llenar opciones raw si existen
+              document.getElementById('optionsRaw').value = data.options_raw || '';
+              toggleFields();
+              var modal = new bootstrap.Modal(document.getElementById('questionModal'));
+              modal.show();
+            })
+            .catch(function(err){
+              alert('No se pudo cargar la pregunta: ' + err.message);
+            });
         });
       });
     </script>
