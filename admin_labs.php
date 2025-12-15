@@ -27,46 +27,54 @@ if (!$roleRow || $roleRow['name'] !== 'super_admin') {
 
 // Manejar acciones POST: create, update, delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+  $action = $_POST['action'] ?? '';
 
+  try {
     if ($action === 'create') {
-        $name = trim($_POST['name'] ?? '');
-        $code = trim($_POST['code'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $contact = trim($_POST['contact'] ?? '');
+      $name = trim($_POST['name'] ?? '');
+      $code = trim($_POST['code'] ?? '');
+      $address = trim($_POST['address'] ?? '');
+      $contact = trim($_POST['contact'] ?? '');
 
-        if ($name !== '') {
-            $ins = $pdo->prepare('INSERT INTO labs (name, code, address, contact) VALUES (:name, :code, :address, :contact)');
-            $ins->execute([':name' => $name, ':code' => $code, ':address' => $address, ':contact' => $contact]);
-        }
-        header('Location: admin_labs.php');
-        exit;
+      if ($name !== '') {
+        $ins = $pdo->prepare('INSERT INTO labs (name, code, address, contact) VALUES (:name, :code, :address, :contact)');
+        $ins->execute([':name' => $name, ':code' => $code, ':address' => $address, ':contact' => $contact]);
+        $_SESSION['flash_success'] = 'Laboratorio creado.';
+      } else {
+        $_SESSION['flash_danger'] = 'Nombre requerido.';
+      }
     }
 
     if ($action === 'update') {
-        $id = (int)($_POST['id'] ?? 0);
-        $name = trim($_POST['name'] ?? '');
-        $code = trim($_POST['code'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $contact = trim($_POST['contact'] ?? '');
+      $id = (int)($_POST['id'] ?? 0);
+      $name = trim($_POST['name'] ?? '');
+      $code = trim($_POST['code'] ?? '');
+      $address = trim($_POST['address'] ?? '');
+      $contact = trim($_POST['contact'] ?? '');
 
-        if ($id > 0 && $name !== '') {
-            $upd = $pdo->prepare('UPDATE labs SET name = :name, code = :code, address = :address, contact = :contact WHERE id = :id');
-            $upd->execute([':name' => $name, ':code' => $code, ':address' => $address, ':contact' => $contact, ':id' => $id]);
-        }
-        header('Location: admin_labs.php');
-        exit;
+      if ($id > 0 && $name !== '') {
+        $upd = $pdo->prepare('UPDATE labs SET name = :name, code = :code, address = :address, contact = :contact WHERE id = :id');
+        $upd->execute([':name' => $name, ':code' => $code, ':address' => $address, ':contact' => $contact, ':id' => $id]);
+        $_SESSION['flash_success'] = 'Laboratorio actualizado.';
+      } else {
+        $_SESSION['flash_danger'] = 'Datos inválidos para actualizar.';
+      }
     }
 
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id > 0) {
-            $del = $pdo->prepare('DELETE FROM labs WHERE id = :id');
-            $del->execute([':id' => $id]);
-        }
-        header('Location: admin_labs.php');
-        exit;
+      $id = (int)($_POST['id'] ?? 0);
+      if ($id > 0) {
+        $del = $pdo->prepare('DELETE FROM labs WHERE id = :id');
+        $del->execute([':id' => $id]);
+        $_SESSION['flash_success'] = 'Laboratorio eliminado.';
+      }
     }
+  } catch (PDOException $e) {
+    $_SESSION['flash_danger'] = 'Error en la operación: ' . $e->getMessage();
+  }
+
+  header('Location: admin_labs.php');
+  exit;
 }
 
 // Obtener lista de laboratorios
@@ -84,6 +92,12 @@ $labs = $labsStmt->fetchAll();
   </head>
   <body class="bg-light">
     <div class="container py-4">
+      <?php if (!empty($_SESSION['flash_success'])): ?>
+        <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+      <?php endif; ?>
+      <?php if (!empty($_SESSION['flash_danger'])): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
+      <?php endif; ?>
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Gestión de Laboratorios</h3>
         <div>

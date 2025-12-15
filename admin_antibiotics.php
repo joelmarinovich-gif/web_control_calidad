@@ -25,38 +25,44 @@ if (!$roleRow || $roleRow['name'] !== 'super_admin') {
 
 // Manejar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+  $action = $_POST['action'] ?? '';
+  try {
     if ($action === 'create') {
-        $name = trim($_POST['name'] ?? '');
-        $abbr = trim($_POST['abbreviation'] ?? '');
-        $atc = trim($_POST['atc_code'] ?? '');
-        if ($name !== '') {
-            $ins = $pdo->prepare('INSERT INTO antibiotics (name, abbreviation, atc_code) VALUES (:name,:abbr,:atc)');
-            $ins->execute([':name'=>$name,':abbr'=>$abbr,':atc'=>$atc]);
-            $_SESSION['flash_success'] = 'Antibiótico creado.';
-        }
+      $name = trim($_POST['name'] ?? '');
+      $abbr = trim($_POST['abbreviation'] ?? '');
+      $atc = trim($_POST['atc_code'] ?? '');
+      if ($name !== '') {
+        $ins = $pdo->prepare('INSERT INTO antibiotics (name, abbreviation, atc_code) VALUES (:name,:abbr,:atc)');
+        $ins->execute([':name'=>$name,':abbr'=>$abbr,':atc'=>$atc]);
+        $_SESSION['flash_success'] = 'Antibiótico creado.';
+      } else {
+        $_SESSION['flash_danger'] = 'Nombre requerido.';
+      }
     }
     if ($action === 'update') {
-        $id = (int)($_POST['id'] ?? 0);
-        $name = trim($_POST['name'] ?? '');
-        $abbr = trim($_POST['abbreviation'] ?? '');
-        $atc = trim($_POST['atc_code'] ?? '');
-        if ($id > 0) {
-            $u = $pdo->prepare('UPDATE antibiotics SET name = :name, abbreviation = :abbr, atc_code = :atc WHERE id = :id');
-            $u->execute([':name'=>$name,':abbr'=>$abbr,':atc'=>$atc,':id'=>$id]);
-            $_SESSION['flash_success'] = 'Antibiótico actualizado.';
-        }
+      $id = (int)($_POST['id'] ?? 0);
+      $name = trim($_POST['name'] ?? '');
+      $abbr = trim($_POST['abbreviation'] ?? '');
+      $atc = trim($_POST['atc_code'] ?? '');
+      if ($id > 0) {
+        $u = $pdo->prepare('UPDATE antibiotics SET name = :name, abbreviation = :abbr, atc_code = :atc WHERE id = :id');
+        $u->execute([':name'=>$name,':abbr'=>$abbr,':atc'=>$atc,':id'=>$id]);
+        $_SESSION['flash_success'] = 'Antibiótico actualizado.';
+      }
     }
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id > 0) {
-            $d = $pdo->prepare('DELETE FROM antibiotics WHERE id = :id');
-            $d->execute([':id'=>$id]);
-            $_SESSION['flash_success'] = 'Antibiótico eliminado.';
-        }
+      $id = (int)($_POST['id'] ?? 0);
+      if ($id > 0) {
+        $d = $pdo->prepare('DELETE FROM antibiotics WHERE id = :id');
+        $d->execute([':id'=>$id]);
+        $_SESSION['flash_success'] = 'Antibiótico eliminado.';
+      }
     }
-    header('Location: admin_antibiotics.php');
-    exit;
+  } catch (PDOException $e) {
+    $_SESSION['flash_danger'] = 'Error en la operación: ' . $e->getMessage();
+  }
+  header('Location: admin_antibiotics.php');
+  exit;
 }
 
 $ants = $pdo->query('SELECT * FROM antibiotics ORDER BY name ASC')->fetchAll();
@@ -81,6 +87,9 @@ $ants = $pdo->query('SELECT * FROM antibiotics ORDER BY name ASC')->fetchAll();
 
       <?php if (!empty($_SESSION['flash_success'])): ?>
         <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+      <?php endif; ?>
+      <?php if (!empty($_SESSION['flash_danger'])): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
       <?php endif; ?>
 
       <div class="mb-3">

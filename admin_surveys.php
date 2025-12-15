@@ -27,58 +27,67 @@ if (!$roleRow || $roleRow['name'] !== 'super_admin') {
 
 // Manejo de acciones POST: create, update, delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+  $action = $_POST['action'] ?? '';
+  try {
     if ($action === 'create') {
-        $title = trim($_POST['title'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $scope = ($_POST['scope'] === 'lab') ? 'lab' : 'global';
-        $lab_id = ($_POST['scope'] === 'lab' && $_POST['lab_id'] !== '') ? (int)$_POST['lab_id'] : null;
-        $status = ($_POST['status'] === 'active') ? 1 : 0;
+      $title = trim($_POST['title'] ?? '');
+      $description = trim($_POST['description'] ?? '');
+      $scope = ($_POST['scope'] === 'lab') ? 'lab' : 'global';
+      $lab_id = ($_POST['scope'] === 'lab' && $_POST['lab_id'] !== '') ? (int)$_POST['lab_id'] : null;
+      $status = ($_POST['status'] === 'active') ? 1 : 0;
 
-        if ($title !== '') {
-            $ins = $pdo->prepare('INSERT INTO surveys (title, description, created_by, scope, lab_id, is_active) VALUES (:title, :desc, :cb, :scope, :lab_id, :is_active)');
-            $ins->execute([
-                ':title' => $title,
-                ':desc' => $description,
-                ':cb' => $_SESSION['user_id'],
-                ':scope' => $scope,
-                ':lab_id' => $lab_id,
-                ':is_active' => $status
-            ]);
-        }
-        header('Location: admin_surveys.php'); exit;
+      if ($title !== '') {
+        $ins = $pdo->prepare('INSERT INTO surveys (title, description, created_by, scope, lab_id, is_active) VALUES (:title, :desc, :cb, :scope, :lab_id, :is_active)');
+        $ins->execute([
+          ':title' => $title,
+          ':desc' => $description,
+          ':cb' => $_SESSION['user_id'],
+          ':scope' => $scope,
+          ':lab_id' => $lab_id,
+          ':is_active' => $status
+        ]);
+        $_SESSION['flash_success'] = 'Encuesta creada.';
+      } else {
+        $_SESSION['flash_danger'] = 'Título requerido.';
+      }
     }
 
     if ($action === 'update') {
-        $id = (int)($_POST['id'] ?? 0);
-        $title = trim($_POST['title'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $scope = ($_POST['scope'] === 'lab') ? 'lab' : 'global';
-        $lab_id = ($_POST['scope'] === 'lab' && $_POST['lab_id'] !== '') ? (int)$_POST['lab_id'] : null;
-        $status = ($_POST['status'] === 'active') ? 1 : 0;
+      $id = (int)($_POST['id'] ?? 0);
+      $title = trim($_POST['title'] ?? '');
+      $description = trim($_POST['description'] ?? '');
+      $scope = ($_POST['scope'] === 'lab') ? 'lab' : 'global';
+      $lab_id = ($_POST['scope'] === 'lab' && $_POST['lab_id'] !== '') ? (int)$_POST['lab_id'] : null;
+      $status = ($_POST['status'] === 'active') ? 1 : 0;
 
-        if ($id > 0 && $title !== '') {
-            $upd = $pdo->prepare('UPDATE surveys SET title = :title, description = :desc, scope = :scope, lab_id = :lab_id, is_active = :is_active WHERE id = :id');
-            $upd->execute([
-                ':title' => $title,
-                ':desc' => $description,
-                ':scope' => $scope,
-                ':lab_id' => $lab_id,
-                ':is_active' => $status,
-                ':id' => $id
-            ]);
-        }
-        header('Location: admin_surveys.php'); exit;
+      if ($id > 0 && $title !== '') {
+        $upd = $pdo->prepare('UPDATE surveys SET title = :title, description = :desc, scope = :scope, lab_id = :lab_id, is_active = :is_active WHERE id = :id');
+        $upd->execute([
+          ':title' => $title,
+          ':desc' => $description,
+          ':scope' => $scope,
+          ':lab_id' => $lab_id,
+          ':is_active' => $status,
+          ':id' => $id
+        ]);
+        $_SESSION['flash_success'] = 'Encuesta actualizada.';
+      } else {
+        $_SESSION['flash_danger'] = 'Datos inválidos para actualizar.';
+      }
     }
 
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id > 0) {
-            $del = $pdo->prepare('DELETE FROM surveys WHERE id = :id');
-            $del->execute([':id' => $id]);
-        }
-        header('Location: admin_surveys.php'); exit;
+      $id = (int)($_POST['id'] ?? 0);
+      if ($id > 0) {
+        $del = $pdo->prepare('DELETE FROM surveys WHERE id = :id');
+        $del->execute([':id' => $id]);
+        $_SESSION['flash_success'] = 'Encuesta eliminada.';
+      }
     }
+  } catch (PDOException $e) {
+    $_SESSION['flash_danger'] = 'Error en la operación: ' . $e->getMessage();
+  }
+  header('Location: admin_surveys.php'); exit;
 }
 
 // Cargar laboratorios para select
@@ -106,6 +115,13 @@ $surveys = $surveysStmt->fetchAll();
           <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#surveyModal" id="btnNew">Nueva Encuesta</button>
         </div>
       </div>
+
+        <?php if (!empty($_SESSION['flash_success'])): ?>
+          <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['flash_danger'])): ?>
+          <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
+        <?php endif; ?>
 
       <div class="card">
         <div class="card-body p-0">

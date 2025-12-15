@@ -37,9 +37,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $i_upper = $_POST['i_upper'] !== '' ? $_POST['i_upper'] : null;
         $r_lower = $_POST['r_lower'] !== '' ? $_POST['r_lower'] : null;
         $note = trim($_POST['note'] ?? '');
-        $ins = $pdo->prepare('INSERT INTO breakpoints (antibiotic_id, standard, version, method, unit, s_upper, i_lower, i_upper, r_lower, note) VALUES (:ab,:std,:ver,:met,:unit,:s,:il,:iu,:r,:note)');
-        $ins->execute([':ab'=>$antibiotic_id,':std'=>$standard,':ver'=>$version,':met'=>$method,':unit'=>$unit,':s'=>$s_upper,':il'=>$i_lower,':iu'=>$i_upper,':r'=>$r_lower,':note'=>$note]);
-        $_SESSION['flash_success'] = 'Punto de corte creado.';
+        if ($antibiotic_id <= 0) {
+          $_SESSION['flash_danger'] = 'Seleccione un antibiótico válido.';
+        } else {
+          $ins = $pdo->prepare('INSERT INTO breakpoints (antibiotic_id, standard, version, method, unit, s_upper, i_lower, i_upper, r_lower, note) VALUES (:ab,:std,:ver,:met,:unit,:s,:il,:iu,:r,:note)');
+          $ins->execute([':ab'=>$antibiotic_id,':std'=>$standard,':ver'=>$version,':met'=>$method,':unit'=>$unit,':s'=>$s_upper,':il'=>$i_lower,':iu'=>$i_upper,':r'=>$r_lower,':note'=>$note]);
+          $_SESSION['flash_success'] = 'Punto de corte creado.';
+        }
     }
     if ($action === 'update') {
         $id = (int)($_POST['id'] ?? 0);
@@ -54,18 +58,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $r_lower = $_POST['r_lower'] !== '' ? $_POST['r_lower'] : null;
         $note = trim($_POST['note'] ?? '');
         if ($id > 0) {
+          if ($antibiotic_id <= 0) {
+            $_SESSION['flash_danger'] = 'Seleccione un antibiótico válido.';
+          } else {
             $u = $pdo->prepare('UPDATE breakpoints SET antibiotic_id=:ab, standard=:std, version=:ver, method=:met, unit=:unit, s_upper=:s, i_lower=:il, i_upper=:iu, r_lower=:r, note=:note WHERE id = :id');
             $u->execute([':ab'=>$antibiotic_id,':std'=>$standard,':ver'=>$version,':met'=>$method,':unit'=>$unit,':s'=>$s_upper,':il'=>$i_lower,':iu'=>$i_upper,':r'=>$r_lower,':note'=>$note,':id'=>$id]);
             $_SESSION['flash_success'] = 'Punto de corte actualizado.';
+          }
         }
     }
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id > 0) {
-            $d = $pdo->prepare('DELETE FROM breakpoints WHERE id = :id');
-            $d->execute([':id'=>$id]);
-            $_SESSION['flash_success'] = 'Punto de corte eliminado.';
-        }
+      $id = (int)($_POST['id'] ?? 0);
+      if ($id > 0) {
+        $d = $pdo->prepare('DELETE FROM breakpoints WHERE id = :id');
+        $d->execute([':id'=>$id]);
+        $_SESSION['flash_success'] = 'Punto de corte eliminado.';
+      }
     }
     header('Location: admin_breakpoints.php');
     exit;
@@ -103,6 +111,9 @@ $bps = $bpStmt->fetchAll();
 
       <?php if (!empty($_SESSION['flash_success'])): ?>
         <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+      <?php endif; ?>
+      <?php if (!empty($_SESSION['flash_danger'])): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
       <?php endif; ?>
 
       <form class="row g-2 mb-3">
