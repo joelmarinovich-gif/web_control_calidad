@@ -79,6 +79,18 @@ if (!empty($antibiotic_ids)) {
   }
 }
 
+// Cargar datos de antibióticos (map id -> nombre) para mostrar en el formulario
+$antibiotics_map = [];
+if (!empty($antibiotic_ids)) {
+  $ph = implode(',', array_fill(0, count($antibiotic_ids), '?'));
+  $aStmt = $pdo->prepare("SELECT id, name, abbreviation FROM antibiotics WHERE id IN ($ph)");
+  $aStmt->execute($antibiotic_ids);
+  $aRows = $aStmt->fetchAll();
+  foreach ($aRows as $ar) {
+    $antibiotics_map[(int)$ar['id']] = $ar;
+  }
+}
+
 function fetchOptions($pdo, $questionId) {
   $s = $pdo->prepare('SELECT * FROM question_options WHERE question_id = :qid ORDER BY display_order ASC, id ASC');
   $s->execute([':qid' => $questionId]);
@@ -129,6 +141,7 @@ function fetchOptions($pdo, $questionId) {
                 </select>
 
               <?php elseif ($q['question_type'] === 'antibiotic'): ?>
+                <div class="mb-1"><strong><?php echo htmlspecialchars($antibiotics_map[$q['antibiotic_id']]['name'] ?? 'Antibiótico'); ?></strong></div>
                 <div class="row g-2">
                   <div class="col-md-4">
                     <input type="number" step="any" class="form-control" name="q_<?php echo (int)$q['id']; ?>_raw" placeholder="Valor (halo / CIM)" <?php echo $q['required'] ? 'required' : ''; ?> >
