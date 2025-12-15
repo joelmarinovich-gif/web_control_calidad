@@ -57,6 +57,12 @@ $surveys = $stmt->fetchAll();
   </head>
   <body class="bg-light">
     <div class="container py-4">
+      <?php if (!empty($_SESSION['flash_success'])): ?>
+        <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?></div>
+      <?php endif; ?>
+      <?php if (!empty($_SESSION['flash_danger'])): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['flash_danger']); unset($_SESSION['flash_danger']); ?></div>
+      <?php endif; ?>
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h4>Hola, <?php echo htmlspecialchars($displayName); ?></h4>
