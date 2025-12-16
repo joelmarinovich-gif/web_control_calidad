@@ -95,6 +95,20 @@ function interpret_using_bp($raw, $bp) {
 $checkStmt = $pdo->prepare('SELECT id FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
 $checkStmt->execute([':sid' => $surveyId, ':uid' => $userId]);
 if ($checkStmt->fetch()) {
+    // Registrar intento de reenvío en audit_logs
+    try {
+        $logStmt = $pdo->prepare('INSERT INTO audit_logs (user_id, action, object_type, object_id, detail) VALUES (:uid, :action, :otype, :oid, :detail)');
+        $logStmt->execute([
+            ':uid' => $userId,
+            ':action' => 'duplicate_submission_attempt',
+            ':otype' => 'survey',
+            ':oid' => $surveyId,
+            ':detail' => 'Intento de reenvío detectado para survey_id=' . $surveyId
+        ]);
+    } catch (Exception $e) {
+        // no bloquear al usuario si falla el log
+    }
+
     $_SESSION['flash_danger'] = 'Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.';
     header('Location: survey_form.php?id=' . $surveyId);
     exit;
