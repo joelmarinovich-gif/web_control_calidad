@@ -91,36 +91,68 @@ function interpret_using_bp($raw, $bp) {
     return 'U';
 }
 
-// Comprobación de doble envío en backend: evitar envíos forzados
-$checkStmt = $pdo->prepare('SELECT id FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
+// Comprobación de envío previo: permitir edición si existe un borrador
+$is_update = false;
+$existing_response_id = null;
+$checkStmt = $pdo->prepare('SELECT id, status FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
 $checkStmt->execute([':sid' => $surveyId, ':uid' => $userId]);
-if ($checkStmt->fetch()) {
-    // Registrar intento de reenvío en audit_logs
-    try {
-        $logStmt = $pdo->prepare('INSERT INTO audit_logs (user_id, action, object_type, object_id, detail) VALUES (:uid, :action, :otype, :oid, :detail)');
-        $logStmt->execute([
-            ':uid' => $userId,
-            ':action' => 'duplicate_submission_attempt',
-            ':otype' => 'survey',
-            ':oid' => $surveyId,
-            ':detail' => 'Intento de reenvío detectado para survey_id=' . $surveyId
-        ]);
-    } catch (Exception $e) {
-        // no bloquear al usuario si falla el log
-    }
+$existing = $checkStmt->fetch();
+if ($existing) {
+    if ($existing['status'] === 'submitted') {
+        // Registrar intento de reenvío en audit_logs
+        try {
+            $logStmt = $pdo->prepare('INSERT INTO audit_logs (user_id, action, object_type, object_id, detail) VALUES (:uid, :action, :otype, :oid, :detail)');
+            $logStmt->execute([
+                ':uid' => $userId,
+                ':action' => 'duplicate_submission_attempt',
+                ':otype' => 'survey',
+                ':oid' => $surveyId,
+                ':detail' => 'Intento de reenvío detectado para survey_id=' . $surveyId
+            ]);
+        } catch (Exception $e) {
+            // no bloquear al usuario si falla el log
+        }
 
-    $_SESSION['flash_danger'] = 'Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.';
-    header('Location: survey_form.php?id=' . $surveyId);
-    exit;
+        $_SESSION['flash_danger'] = 'Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.';
+        header('Location: survey_form.php?id=' . $surveyId);
+        exit;
+    } else {
+        // existe un borrador; permitimos actualización reutilizando el response existente
+        $is_update = true;
+        $existing_response_id = (int)$existing['id'];
+        // Optional: allow explicit existing_response_id from POST and validate it
+        if (!empty($_POST['existing_response_id'])) {
+            $posted = (int)$_POST['existing_response_id'];
+            if ($posted !== $existing_response_id) {
+                // possible mismatch - treat as invalid
+                $_SESSION['flash_danger'] = 'Identificador de borrador inválido.';
+                header('Location: survey_form.php?id=' . $surveyId);
+                exit;
+            }
+        }
+    }
 }
 
 try {
     $pdo->beginTransaction();
 
-    // Insert response
-    $ins = $pdo->prepare('INSERT INTO responses (survey_id, user_id, lab_id, status) VALUES (:sid, :uid, :lid, :st)');
-    $ins->execute([':sid'=>$surveyId, ':uid'=>$userId, ':lid'=>$userLabId, ':st'=>'submitted']);
-    $response_id = $pdo->lastInsertId();
+    // If updating an existing draft, clear prior answers and reuse response_id
+    if ($is_update && $existing_response_id) {
+        $response_id = $existing_response_id;
+        // delete previous antibiotic_results and response_answers for this response
+        $delAb = $pdo->prepare('DELETE ar FROM antibiotic_results ar JOIN response_answers ra ON ar.response_answer_id = ra.id WHERE ra.response_id = :rid');
+        $delAb->execute([':rid'=>$response_id]);
+        $delRa = $pdo->prepare('DELETE FROM response_answers WHERE response_id = :rid');
+        $delRa->execute([':rid'=>$response_id]);
+        // update response row to submitted and set submitted_at
+        $up = $pdo->prepare('UPDATE responses SET status = :st, submitted_at = CURRENT_TIMESTAMP, lab_id = :lid WHERE id = :id');
+        $up->execute([':st'=>'submitted', ':lid'=>$userLabId, ':id'=>$response_id]);
+    } else {
+        // Insert response
+        $ins = $pdo->prepare('INSERT INTO responses (survey_id, user_id, lab_id, status) VALUES (:sid, :uid, :lid, :st)');
+        $ins->execute([':sid'=>$surveyId, ':uid'=>$userId, ':lid'=>$userLabId, ':st'=>'submitted']);
+        $response_id = $pdo->lastInsertId();
+    }
 
     // Prepare statements
     $insAnswer = $pdo->prepare('INSERT INTO response_answers (response_id, question_id, option_id, answer_text, answer_number) VALUES (:rid,:qid,:optid,:txt,:num)');

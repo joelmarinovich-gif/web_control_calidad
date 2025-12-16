@@ -56,6 +56,11 @@ $rows = $stmt->fetchAll();
           <td><?php echo htmlspecialchars($r['submitted_at']); ?></td>
           <td>
             <a class="btn btn-sm btn-outline-primary" href="admin_response_view.php?id=<?php echo (int)$r['id']; ?>">Ver Detalle</a>
+            <!-- Reabrir envío: solo admins pueden ver este botón -->
+            <form method="post" action="admin_reopen_response.php" style="display:inline-block;margin-left:6px;" onsubmit="return confirm('Confirmar: reabrir este envío permitirá al laboratorio editar y reenviar. Continuar?');">
+              <input type="hidden" name="response_id" value="<?php echo (int)$r['id']; ?>">
+              <button type="submit" class="btn btn-sm btn-outline-warning">Reabrir envío</button>
+            </form>
           </td>
         </tr>
       <?php endforeach; ?>

@@ -97,15 +97,59 @@ function fetchOptions($pdo, $questionId) {
   return $s->fetchAll();
 }
 
-// Verificación de doble envío: comprobar si el usuario ya tiene una respuesta para esta encuesta
+// Verificación de envío previo: si existe un response para este usuario/encuesta
 $already_submitted = false;
+$existing_response_id = null;
+$existing_response_status = null;
 if (isset($_SESSION['user_id']) && $surveyId > 0) {
-  $checkStmt = $pdo->prepare('SELECT id FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
+  $checkStmt = $pdo->prepare('SELECT id, status FROM responses WHERE survey_id = :sid AND user_id = :uid LIMIT 1');
   $checkStmt->execute([':sid' => $surveyId, ':uid' => $_SESSION['user_id']]);
-  if ($checkStmt->fetch()) {
+  $row = $checkStmt->fetch();
+  if ($row) {
     $already_submitted = true;
+    $existing_response_id = (int)$row['id'];
+    $existing_response_status = $row['status'];
   }
 }
+
+// If already submitted, load the answers for read-only display
+$user_answers = [];
+$user_antibiotics = [];
+if ($already_submitted && $existing_response_id) {
+  $raStmt = $pdo->prepare('SELECT * FROM response_answers WHERE response_id = :rid ORDER BY id ASC');
+  $raStmt->execute([':rid' => $existing_response_id]);
+  $ras = $raStmt->fetchAll();
+  foreach ($ras as $ra) {
+    $qid = (int)$ra['question_id'];
+    if (!isset($user_answers[$qid])) $user_answers[$qid] = [];
+    if (!empty($ra['option_id'])) {
+      $opt = $pdo->prepare('SELECT label, value FROM question_options WHERE id = :id LIMIT 1'); $opt->execute([':id'=>$ra['option_id']]); $o = $opt->fetch();
+      $val = $o ? ($o['label'] ?: $o['value']) : 'option_'.$ra['option_id'];
+      $user_answers[$qid][] = $val;
+    } elseif ($ra['answer_text'] !== null) {
+      $user_answers[$qid][] = $ra['answer_text'];
+    } elseif ($ra['answer_number'] !== null) {
+      $user_answers[$qid][] = (string)$ra['answer_number'];
+    }
+  }
+  foreach ($user_answers as $k=>$v) $user_answers[$k] = count($v)===1? $v[0] : $v;
+
+  // antibiotic results
+  $abStmt = $pdo->prepare('SELECT ar.*, ra.question_id FROM antibiotic_results ar JOIN response_answers ra ON ar.response_answer_id = ra.id WHERE ra.response_id = :rid');
+  $abStmt->execute([':rid'=>$existing_response_id]);
+  foreach ($abStmt->fetchAll() as $ar) {
+    $qid = (int)$ar['question_id'];
+    $user_antibiotics[$qid] = ['raw'=>$ar['raw_value'],'interp'=>strtoupper(trim($ar['interpretation'] ?? ''))];
+  }
+}
+// DEBUG: show quick diagnostics (temporal)
+$debug_info = [
+  'session_user_id' => $_SESSION['user_id'] ?? null,
+  'existing_response_id' => $existing_response_id ?? null,
+  'existing_response_status' => $existing_response_status ?? null,
+  'user_answers_count' => count($user_answers),
+  'user_antibiotics_count' => count($user_antibiotics),
+];
 ?>
 <!doctype html>
 <html lang="es">
@@ -122,8 +166,100 @@ if (isset($_SESSION['user_id']) && $surveyId > 0) {
         <a href="user_dashboard.php" class="btn btn-outline-secondary">Volver</a>
       </div>
 
-      <?php if ($already_submitted): ?>
-        <div class="alert alert-warning">Ya has enviado esta encuesta. Si cometiste un error, contacta al administrador para que la rehabilite.</div>
+      <?php if ($already_submitted && $existing_response_status === 'submitted'): ?>
+        <div class="alert alert-warning">Ya has enviado esta encuesta. Debajo están tus respuestas en modo solo lectura. Si detectas un error, solicita que se reabra tu envío.</div>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Tus respuestas (solo lectura)</h5>
+            <?php if (!empty($questions)): foreach ($questions as $q): $qid=(int)$q['id']; ?>
+              <div class="mb-2">
+                <label class="form-label fw-bold"><?php echo htmlspecialchars($q['question_text']); ?></label>
+                <div class="form-control" style="background:#f8f9fa;">
+                  <?php
+                    if ($q['question_type'] === 'antibiotic') {
+                      $ab = $user_antibiotics[$qid] ?? null;
+                      echo 'Valor: ' . htmlspecialchars($ab['raw'] ?? '(sin dato)') . ' — Interp: ' . htmlspecialchars($ab['interp'] ?? '(sin dato)');
+                    } else {
+                      $val = $user_answers[$qid] ?? '(sin respuesta)';
+                      if (is_array($val)) echo htmlspecialchars(implode(', ', $val)); else echo htmlspecialchars($val);
+                    }
+                  ?>
+                </div>
+              </div>
+            <?php endforeach; else: ?>
+              <div class="text-muted">No hay preguntas definidas.</div>
+            <?php endif; ?>
+
+            <form method="post" action="request_reopen.php" class="mt-3">
+              <input type="hidden" name="response_id" value="<?php echo (int)$existing_response_id; ?>">
+              <div class="mb-2">
+                <label class="form-label">Motivo de la solicitud (opcional)</label>
+                <textarea name="reason" class="form-control" rows="2" placeholder="Explique por qué solicita reabrir este envío..."></textarea>
+              </div>
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-warning" type="submit" onclick="return confirm('Enviar solicitud para reabrir envío al administrador?');">Solicitar reabrir envío</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      <?php elseif ($already_submitted && $existing_response_status === 'draft'): ?>
+        <!-- Editable form: there's an existing draft response for this user, preload values and allow editing -->
+        <div class="alert alert-info">Tienes un envío en borrador; edita tus respuestas y pulsa Enviar para actualizarlo.</div>
+        <form method="post" action="responses_submit.php" onsubmit="return confirmSubmit();">
+          <input type="hidden" name="survey_id" value="<?php echo (int)$surveyId; ?>">
+          <input type="hidden" name="existing_response_id" value="<?php echo (int)$existing_response_id; ?>">
+
+          <?php if (empty($questions)): ?>
+            <div class="alert alert-info">Esta encuesta no tiene preguntas definidas.</div>
+          <?php else: ?>
+            <?php foreach ($questions as $q): $qid=(int)$q['id']; ?>
+              <div class="mb-3">
+                <label class="form-label"><?php echo htmlspecialchars($q['question_text']); ?>
+                  <?php if ($q['required']): ?> <span class="text-danger">*</span><?php endif; ?>
+                </label>
+
+                <?php if ($q['question_type'] === 'text'): ?>
+                  <input type="text" class="form-control" name="q_<?php echo $qid; ?>" value="<?php echo htmlspecialchars($user_answers[$qid] ?? ''); ?>" <?php echo $q['max_length'] ? 'maxlength="'.(int)$q['max_length'].'"' : ''; ?> <?php echo $q['required'] ? 'required' : ''; ?> >
+
+                <?php elseif ($q['question_type'] === 'numeric'): ?>
+                  <input type="number" step="any" class="form-control" name="q_<?php echo $qid; ?>" value="<?php echo htmlspecialchars($user_answers[$qid] ?? ''); ?>" <?php echo $q['required'] ? 'required' : ''; ?> >
+
+                <?php elseif ($q['question_type'] === 'select' || $q['question_type'] === 'multiselect'): ?>
+                  <?php $opts = fetchOptions($pdo, $q['id']); $uval = $user_answers[$qid] ?? null; if (!is_array($uval) && $uval !== null) $uval = [$uval]; ?>
+                  <select class="form-select" name="<?php echo $q['question_type'] === 'multiselect' ? 'q_'. $qid .'[]' : 'q_'. $qid; ?>" <?php echo $q['question_type'] === 'multiselect' ? 'multiple' : ''; ?> <?php echo $q['required'] ? 'required' : ''; ?>>
+                    <?php if ($q['question_type'] === 'select'): ?><option value="">-- Seleccione --</option><?php endif; ?>
+                    <?php foreach ($opts as $o): $ov = $o['value']; $selected = in_array($ov, (array)$uval) ? 'selected' : ''; ?>
+                      <option value="<?php echo htmlspecialchars($ov); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($o['label'] ?: $ov); ?></option>
+                    <?php endforeach; ?>
+                  </select>
+
+                <?php elseif ($q['question_type'] === 'antibiotic'): ?>
+                  <div class="mb-1"><strong><?php echo htmlspecialchars($antibiotics_map[$q['antibiotic_id']]['name'] ?? 'Antibiótico'); ?></strong></div>
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <input type="number" step="any" class="form-control" name="q_<?php echo $qid; ?>_raw" placeholder="Valor (halo / CIM)" value="<?php echo htmlspecialchars($user_antibiotics[$qid]['raw'] ?? ''); ?>" <?php echo $q['required'] ? 'required' : ''; ?> >
+                    </div>
+                    <div class="col-md-4">
+                      <input type="text" class="form-control" name="q_<?php echo $qid; ?>_interpretation" placeholder="Interpretación (S/I/R)" value="<?php echo htmlspecialchars($user_antibiotics[$qid]['interp'] ?? ''); ?>" maxlength="1">
+                    </div>
+                  </div>
+
+                <?php else: ?>
+                  <input type="text" class="form-control" name="q_<?php echo $qid; ?>" value="<?php echo htmlspecialchars($user_answers[$qid] ?? ''); ?>">
+                <?php endif; ?>
+
+                <?php if (!empty($q['help_text'])): ?><div class="form-text"><?php echo htmlspecialchars($q['help_text']); ?></div><?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+          <?php endif; ?>
+
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary" type="submit">Enviar Resultados</button>
+          </div>
+        </form>
+
       <?php else: ?>
       <form method="post" action="responses_submit.php" onsubmit="return confirmSubmit();">
         <input type="hidden" name="survey_id" value="<?php echo (int)$surveyId; ?>">
