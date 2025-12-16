@@ -6,18 +6,30 @@ if (!isset($_SESSION['user_id'])) { header('Location: index.php'); exit; }
 
 try { $pdo = getPDO(); } catch (PDOException $e) { echo 'DB error'; exit; }
 
+// Mostrar errores (temporal, útil para diagnosticar HTTP 500 en hosting)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // role check
 $roleStmt = $pdo->prepare('SELECT name FROM roles WHERE id = :id LIMIT 1');
 $roleStmt->execute([':id' => $_SESSION['role_id'] ?? 0]);
 $roleRow = $roleStmt->fetch();
 if (!$roleRow || !in_array($roleRow['name'], ['super_admin','admin'])) { header('Location: dashboard.php'); exit; }
 
-// ensure reference_responses table exists
-$pdo->exec("CREATE TABLE IF NOT EXISTS reference_responses (
-  survey_id INT PRIMARY KEY,
-  response_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
+// ensure reference_responses table exists (with engine/charset)
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS reference_responses (
+      survey_id INT PRIMARY KEY,
+      response_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+} catch (Exception $e) {
+    // Si falla la creación, registrar y mostrar mensaje para diagnóstico
+    error_log('reference_responses create error: ' . $e->getMessage());
+    echo '<div class="alert alert-danger">Error creando la tabla reference_responses: ' . htmlspecialchars($e->getMessage()) . '</div>';
+    exit;
+}
 
 $surveyId = isset($_REQUEST['survey_id']) ? (int)$_REQUEST['survey_id'] : 0;
 
