@@ -179,6 +179,10 @@ $debug_info = [
                   <?php
                     if ($q['question_type'] === 'antibiotic') {
                       $ab = $user_antibiotics[$qid] ?? null;
+                      // Obtenemos el nombre del mapa de antibióticos cargado previamente
+                      $abName = $antibiotics_map[$q['antibiotic_id']]['name'] ?? 'Antibiótico';
+                      
+                      echo '<div class="fw-bold text-primary mb-1">' . htmlspecialchars($abName) . '</div>';
                       echo 'Valor: ' . htmlspecialchars($ab['raw'] ?? '(sin dato)') . ' — Interp: ' . htmlspecialchars($ab['interp'] ?? '(sin dato)');
                     } else {
                       $val = $user_answers[$qid] ?? '(sin respuesta)';
