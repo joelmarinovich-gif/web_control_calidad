@@ -11,6 +11,26 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+// Preparar logger para capturar errores fatales y excepciones y facilitar diagnóstico en hosting
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+  @mkdir($logDir, 0755, true);
+}
+$logFile = $logDir . '/admin_reference_results.log';
+
+set_error_handler(function ($severity, $message, $file, $line) {
+  // Convertir errores en excepciones para atraparlos en el handler de excepciones
+  throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+set_exception_handler(function ($e) use ($logFile) {
+  $msg = "[" . date('Y-m-d H:i:s') . "] Uncaught exception: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n" . $e->getTraceAsString() . "\n\n";
+  @file_put_contents($logFile, $msg, FILE_APPEND);
+  http_response_code(500);
+  echo '<div class="alert alert-danger">Error interno. Detalles guardados en logs/admin_reference_results.log</div>';
+  exit;
+});
+
 // role check
 $roleStmt = $pdo->prepare('SELECT name FROM roles WHERE id = :id LIMIT 1');
 $roleStmt->execute([':id' => $_SESSION['role_id'] ?? 0]);
