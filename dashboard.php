@@ -11,6 +11,7 @@ $name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : $_SESSION['emai
 
 // Determinar rol para redirecciones y enlaces
 $isSuper = false;
+$isAdmin = false;
 $roleName = null;
 try {
   $pdo = getPDO();
@@ -20,6 +21,7 @@ try {
   if ($rr) {
     $roleName = $rr['name'];
     if ($roleName === 'super_admin') $isSuper = true;
+    if (in_array($roleName, ['super_admin','admin'])) $isAdmin = true;
     // Redirigir lab_user directamente al dashboard de usuario
     if ($roleName === 'lab_user') {
       header('Location: user_dashboard.php');
@@ -46,10 +48,15 @@ try {
             <div class="card-body">
               <h4 class="card-title">Bienvenido, <?php echo htmlspecialchars($name); ?></h4>
               <p class="card-text">Has ingresado al panel de control.</p>
+              <?php if ($isAdmin): ?>
+                <a href="admin_responses.php" class="btn btn-secondary me-2">Ver Envíos</a>
+                <a href="admin_statistics.php" class="btn btn-primary me-2">Estadísticas</a>
+                <a href="admin_reference_results.php" class="btn btn-info me-2">Resultados de Referencia</a>
+                <a href="admin_surveys.php" class="btn btn-info me-2">Gestionar Encuestas</a>
+              <?php endif; ?>
               <?php if ($isSuper): ?>
                 <a href="admin_labs.php" class="btn btn-primary me-2">Administrar Laboratorios</a>
                 <a href="admin_users.php" class="btn btn-success me-2">Administrar Usuarios</a>
-                <a href="admin_surveys.php" class="btn btn-info me-2">Gestionar Encuestas</a>
                 <a href="admin_antibiotics.php" class="btn btn-warning me-2">Gestionar Antibióticos</a>
                 <a href="admin_breakpoints.php" class="btn btn-dark me-2">Gestionar Breakpoints</a>
               <?php endif; ?>
