@@ -39,6 +39,7 @@ $rows = $stmt->fetchAll();
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h4>Envíos recibidos</h4>
     <div>
+      <a href="dashboard.php" class="btn btn-sm btn-outline-secondary me-2">Volver</a>
       <a href="admin_reference_results.php" class="btn btn-sm btn-secondary">Cargar resultados de referencia</a>
       <a href="admin_statistics.php" class="btn btn-sm btn-primary">Estadísticas</a>
     </div>
