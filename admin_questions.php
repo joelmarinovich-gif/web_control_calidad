@@ -57,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $required = isset($_POST['required']) ? 1 : 0;
         $display_order = (int)($_POST['display_order'] ?? 0);
         $antibiotic_id = ($_POST['antibiotic_id'] !== '') ? (int)$_POST['antibiotic_id'] : null;
+        // NUEVO: Capturar el método
+        $antibiotic_method = ($_POST['antibiotic_method'] !== '') ? $_POST['antibiotic_method'] : null;
         $options_raw = $_POST['options_raw'] ?? '';
 
         if ($question_text === '') {
@@ -68,28 +70,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             if ($action === 'create') {
-                $ins = $pdo->prepare('INSERT INTO survey_questions (survey_id, question_text, question_key, question_type, required, display_order, max_length, antibiotic_id) VALUES (:survey_id, :qtext, :qkey, :qtype, :req, :dorder, NULL, :abid)');
-                $ins->execute([
-                    ':survey_id' => $survey_id,
-                    ':qtext' => $question_text,
-                    ':qkey' => null,
-                    ':qtype' => $question_type,
-                    ':req' => $required,
-                    ':dorder' => $display_order,
-                    ':abid' => $antibiotic_id
-                ]);
+              $ins = $pdo->prepare('INSERT INTO survey_questions (survey_id, question_text, question_key, question_type, required, display_order, max_length, antibiotic_id, antibiotic_method) VALUES (:survey_id, :qtext, :qkey, :qtype, :req, :dorder, NULL, :abid, :abmethod)');
+              $ins->execute([
+                ':survey_id' => $survey_id,
+                ':qtext' => $question_text,
+                ':qkey' => null,
+                ':qtype' => $question_type,
+                ':req' => $required,
+                ':dorder' => $display_order,
+                ':abid' => $antibiotic_id,
+                ':abmethod' => $antibiotic_method
+              ]);
                 $new_qid = (int)$pdo->lastInsertId();
             } else {
-                $upd = $pdo->prepare('UPDATE survey_questions SET question_text = :qtext, question_type = :qtype, required = :req, display_order = :dorder, antibiotic_id = :abid WHERE id = :id AND survey_id = :survey_id');
-                $upd->execute([
-                    ':qtext' => $question_text,
-                    ':qtype' => $question_type,
-                    ':req' => $required,
-                    ':dorder' => $display_order,
-                    ':abid' => $antibiotic_id,
-                    ':id' => $id,
-                    ':survey_id' => $survey_id
-                ]);
+              $upd = $pdo->prepare('UPDATE survey_questions SET question_text = :qtext, question_type = :qtype, required = :req, display_order = :dorder, antibiotic_id = :abid, antibiotic_method = :abmethod WHERE id = :id AND survey_id = :survey_id');
+              $upd->execute([
+                ':qtext' => $question_text,
+                ':qtype' => $question_type,
+                ':req' => $required,
+                ':dorder' => $display_order,
+                ':abid' => $antibiotic_id,
+                ':abmethod' => $antibiotic_method,
+                ':id' => $id,
+                ':survey_id' => $survey_id
+              ]);
                 $new_qid = $id;
                 // borrar opciones previas (se reinsertarán si aplica)
                 $delOpt = $pdo->prepare('DELETE FROM question_options WHERE question_id = :qid');
@@ -134,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Cargar preguntas
-$qStmt = $pdo->prepare('SELECT id, question_text, question_type, required, display_order, antibiotic_id FROM survey_questions WHERE survey_id = :sid ORDER BY display_order ASC, id ASC');
+$qStmt = $pdo->prepare('SELECT id, question_text, question_type, required, display_order, antibiotic_id, antibiotic_method FROM survey_questions WHERE survey_id = :sid ORDER BY display_order ASC, id ASC');
 $qStmt->execute([':sid' => $survey_id]);
 $questions = $qStmt->fetchAll();
 
@@ -197,7 +201,17 @@ foreach ($questions as $qq) {
                 <?php foreach ($questions as $q): ?>
                 <tr>
                   <td><?php echo htmlspecialchars($q['question_text']); ?></td>
-                  <td><?php echo htmlspecialchars($q['question_type']); ?><?php echo $q['question_type'] === 'antibiotic' && $q['antibiotic_id'] ? ' (ID: '.(int)$q['antibiotic_id'].')' : ''; ?></td>
+                            <td>
+                            <?php echo htmlspecialchars($q['question_type']); ?>
+                            <?php 
+                              if ($q['question_type'] === 'antibiotic' && $q['antibiotic_id']) {
+                                echo ' (ID: '.(int)$q['antibiotic_id'].')';
+                                if (!empty($q['antibiotic_method'])) {
+                                  echo '<br><span class="badge bg-info text-dark">Método: ' . strtoupper(htmlspecialchars($q['antibiotic_method'])) . '</span>';
+                                }
+                              } 
+                            ?>
+                            </td>
                   <td><?php echo $q['required'] ? 'Sí' : 'No'; ?></td>
                   <td><?php echo (int)$q['display_order']; ?></td>
                   <td>
@@ -258,6 +272,14 @@ foreach ($questions as $qq) {
                     <option value="<?php echo (int)$a['id']; ?>"><?php echo htmlspecialchars($a['name']); ?></option>
                   <?php endforeach; ?>
                 </select>
+                <div class="mt-2">
+                  <label class="form-label">Método</label>
+                  <select class="form-select" name="antibiotic_method" id="antibioticMethod">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="disk">Disco (mm)</option>
+                    <option value="mic">CIM / Etest (µg/mL)</option>
+                  </select>
+                </div>
               </div>
               <div class="mb-3" id="optionsWrap" style="display:none;">
                 <label class="form-label">Opciones (una por línea)</label>
@@ -300,6 +322,7 @@ foreach ($questions as $qq) {
         document.getElementById('qText').value = '';
         document.getElementById('qType').value = 'text';
         document.getElementById('antibioticId').value = '';
+        document.getElementById('antibioticMethod').value = '';
         document.getElementById('optionsRaw').value = '';
         document.getElementById('qRequired').checked = false;
         document.getElementById('qOrder').value = 0;
@@ -322,6 +345,7 @@ foreach ($questions as $qq) {
               document.getElementById('qText').value = data.question_text;
               document.getElementById('qType').value = data.question_type;
               document.getElementById('antibioticId').value = data.antibiotic_id || '';
+              document.getElementById('antibioticMethod').value = data.antibiotic_method || '';
               document.getElementById('qRequired').checked = data.required == 1 || data.required === true;
               document.getElementById('qOrder').value = data.display_order || 0;
               // llenar opciones raw si existen

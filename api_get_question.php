@@ -34,7 +34,7 @@ if ($id <= 0) {
 }
 
 // Obtener pregunta
-$stmt = $pdo->prepare('SELECT id, survey_id, question_text, question_type, required, display_order, antibiotic_id FROM survey_questions WHERE id = :id LIMIT 1');
+$stmt = $pdo->prepare('SELECT id, survey_id, question_text, question_type, required, display_order, antibiotic_id, antibiotic_method FROM survey_questions WHERE id = :id LIMIT 1');
 $stmt->execute([':id' => $id]);
 $q = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$q) {
@@ -63,6 +63,7 @@ echo json_encode([
     'required' => (int)$q['required'],
     'display_order' => (int)$q['display_order'],
     'antibiotic_id' => $q['antibiotic_id'] === null ? null : (int)$q['antibiotic_id'],
+    'antibiotic_method' => $q['antibiotic_method'] ?? null,
     'options_raw' => $options_raw
 ]);
 
