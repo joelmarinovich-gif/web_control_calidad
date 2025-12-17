@@ -101,6 +101,7 @@ CREATE TABLE survey_questions (
   display_order INT DEFAULT 0,
   max_length INT DEFAULT NULL,
   antibiotic_id INT DEFAULT NULL,
+  antibiotic_method ENUM('disk','mic') DEFAULT NULL,
   CONSTRAINT fk_questions_survey FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_questions_antibiotic FOREIGN KEY (antibiotic_id) REFERENCES antibiotics(id) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -160,6 +161,16 @@ CREATE TABLE antibiotic_results (
   CONSTRAINT fk_abres_answer FOREIGN KEY (response_answer_id) REFERENCES response_answers(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_abres_antibiotic FOREIGN KEY (antibiotic_id) REFERENCES antibiotics(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_abres_breakpoint FOREIGN KEY (breakpoint_id) REFERENCES breakpoints(id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabla para vincular la respuesta de referencia (patrón de oro) por encuesta
+DROP TABLE IF EXISTS reference_responses;
+CREATE TABLE reference_responses (
+  survey_id INT PRIMARY KEY,
+  response_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ref_survey FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_ref_response FOREIGN KEY (response_id) REFERENCES responses(id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Auditoría
