@@ -217,7 +217,18 @@ try {
             if (!empty($q['antibiotic_id'])) {
                 $abid = (int)$q['antibiotic_id'];
                 $bps = $breakpoints_map[$abid] ?? [];
-                $bp = pick_breakpoint($bps);
+                // If the question declares a preferred method (disk/mic), try to use that
+                $preferred_method = $q['antibiotic_method'] ?? null;
+                $bp = null;
+                if ($preferred_method) {
+                    $filtered = array_filter($bps, function($b) use ($preferred_method) { return ($b['method'] ?? null) === $preferred_method; });
+                    if (!empty($filtered)) {
+                        $bp = pick_breakpoint(array_values($filtered));
+                    }
+                }
+                if ($bp === null) {
+                    $bp = pick_breakpoint($bps);
+                }
                 $bp_id = $bp ? (int)$bp['id'] : null;
                 $method = $bp ? $bp['method'] : 'disk';
                 $unit = $bp ? $bp['unit'] : '';

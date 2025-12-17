@@ -55,6 +55,8 @@ $antibiotic_ids = [];
 foreach ($questions as $qq) {
   if ($qq['question_type'] === 'antibiotic' && !empty($qq['antibiotic_id'])) {
     $question_to_antibiotic[(int)$qq['id']] = (int)$qq['antibiotic_id'];
+    // map question => preferred method if set
+    $question_to_method[(int)$qq['id']] = $qq['antibiotic_method'] ?? null;
     $antibiotic_ids[] = (int)$qq['antibiotic_id'];
   }
 }
@@ -324,6 +326,7 @@ $debug_info = [
   <script>
     const breakpoints = <?php echo json_encode($breakpoints, JSON_THROW_ON_ERROR); ?>;
     const questionToAntibiotic = <?php echo json_encode($question_to_antibiotic, JSON_THROW_ON_ERROR); ?>;
+    const questionToMethod = <?php echo json_encode($question_to_method ?? [], JSON_THROW_ON_ERROR); ?>;
 
     // Confirmación de envío del formulario
     function confirmSubmit() {
@@ -380,14 +383,21 @@ $debug_info = [
 
       // Attach listeners to all antibiotic raw inputs
       document.querySelectorAll('input[name$="_raw"]').forEach(function (el) {
-        el.addEventListener('input', function (ev) {
+          el.addEventListener('input', function (ev) {
           const name = ev.target.name; // q_<id>_raw
           const m = name.match(/^q_(\d+)_raw$/);
           if (!m) return;
           const qid = parseInt(m[1], 10);
           const abId = questionToAntibiotic[qid];
           const bps = breakpoints[abId] || [];
-          const bp = pickBreakpoint(bps);
+          // prefer method declared on the question if present
+          const qMethod = questionToMethod[qid] || '';
+          let bp = null;
+          if (qMethod) {
+            const filtered = bps.filter(b => (b.method || '') === qMethod);
+            if (filtered.length) bp = pickBreakpoint(filtered);
+          }
+          if (!bp) bp = pickBreakpoint(bps);
           const val = ev.target.value;
           const code = interpretValue(val, bp);
           const interpInput = document.querySelector('input[name="q_' + qid + '_interpretation"]');
